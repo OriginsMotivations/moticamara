@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOTIGALLERY</title>
+    <!-- Importar Material Design Icons y Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Material Design Lite CSS -->
+    <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: #f5f5f5;
+        }
+
+        /* Estilos para el header */
+        header {
+            background-color: #3f51b5;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        /* Estilos para el contenedor principal */
+        #app-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Estilos para el contenedor de la cámara */
+        #camera-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        video, canvas {
+            width: 100%;
+            height: auto;
+            max-height: 60vh;
+            border-radius: 10px;
+        }
+
+        /* Estilos para la galería */
+        #gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background-color: #fff;
+            overflow-y: auto;
+        }
+
+        /* Contenedor de fotos con botones */
+        .photo-container {
+            position: relative;
+            width: 100px;
+            height: 100px;
+        }
+
+        .photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .delete-btn, .download-btn {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 16px;
+        }
+
+        .delete-btn {
+            top: 5px;
+            right: 5px;
+        }
+
+        .download-btn {
+            bottom: 5px;
+            right: 5px;
+        }
+
+        /* Estilos para el botón flotante de la cámara */
+        .camera-btn {
+            background-color: #03a9f4;
+            color: #fff;
+            border-radius: 50%;
+            padding: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .camera-btn:hover {
+            background-color: #0288d1;
+        }
+
+        /* Estilos para el footer */
+        footer {
+            background-color: #3f51b5;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+
+        /* Estilos para la ventana modal */
+        .modal {
+            display: none; /* Ocultar por defecto */
+            position: fixed;
+            z-index: 999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 10px;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            padding: 10px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header con el título -->
+    <header>
+        <h1>MOTIGALLERY OM2024</h1>
+    </header>
+
+    <!-- Contenedor principal -->
+    <div id="app-container">
+        <!-- Contenedor de la cámara -->
+        <div id="camera-container">
+            <video id="camera" autoplay></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+
+        <!-- Galería de fotos -->
+        <div id="gallery"></div>
+
+        <!-- Botón para tomar fotos -->
+        <span class="material-icons camera-btn" id="take-photo">camera_alt</span>
+    </div>
+
+    <!-- Modal para ver fotos ampliadas -->
+    <div id="photo-modal" class="modal">
+        <button class="material-icons close-btn" id="close-modal">close</button>
+        <img id="modal-photo" src="" alt="Foto ampliada">
+    </div>
+
+    <!-- Footer fijo 
+    <footer>
+        ©OM 2024
+    </footer>-->
+
+    <!-- Material Design Lite JS -->
+    <script src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+    <script>
+        const video = document.getElementById('camera');
+        const canvas = document.getElementById('canvas');
+        const takePhotoButton = document.getElementById('take-photo');
+        const gallery = document.getElementById('gallery');
+        const context = canvas.getContext('2d');
+
+        // Elementos del modal
+        const modal = document.getElementById('photo-modal');
+        const modalImg = document.getElementById('modal-photo');
+        const closeModalBtn = document.getElementById('close-modal');
+
+        // Cargar fotos desde el LocalStorage
+        const loadPhotosFromLocalStorage = () => {
+            const photos = JSON.parse(localStorage.getItem('photos')) || [];
+            photos.forEach(photoURL => addPhotoToGallery(photoURL));
+        };
+
+        // Guardar fotos en el LocalStorage
+        const savePhotosToLocalStorage = (photos) => {
+            localStorage.setItem('photos', JSON.stringify(photos));
+        };
+
+        // Añadir foto a la galería y al LocalStorage
+        const addPhotoToGallery = (photoURL) => {
+            // Crear un nuevo contenedor para la foto y el botón de eliminación
+            const photoContainer = document.createElement('div');
+            photoContainer.classList.add('photo-container');
+
+            // Crear el elemento img para la foto
+            const img = document.createElement('img');
+            img.src = photoURL;
+            img.classList.add('photo');
+
+            // Crear el botón para eliminar la foto
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = 'delete';
+            deleteBtn.classList.add('material-icons', 'delete-btn');
+
+            // Evento para eliminar la foto cuando se hace clic en el botón
+            deleteBtn.addEventListener('click', () => {
+                gallery.removeChild(photoContainer);
+                const photos = JSON.parse(localStorage.getItem('photos')) || [];
+                const updatedPhotos = photos.filter(photo => photo !== photoURL);
+                savePhotosToLocalStorage(updatedPhotos);
+            });
+
+            // Crear el botón para descargar la foto
+            const downloadBtn = document.createElement('button');
+            downloadBtn.innerHTML = 'download';
+            downloadBtn.classList.add('material-icons', 'download-btn');
+            downloadBtn.addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.href = photoURL;
+                link.download = 'photo.png';
+                link.click();
+            });
+
+            // Evento para mostrar la foto en el modal al hacer clic en la imagen
+            img.addEventListener('click', () => {
+                modal.style.display = 'flex';
+                modalImg.src = photoURL;
+            });
+
+            // Añadir la imagen, el botón de eliminación y de descarga al contenedor
+            photoContainer.appendChild(img);
+            photoContainer.appendChild(deleteBtn);
+            photoContainer.appendChild(downloadBtn);
+
+            // Añadir el contenedor con la foto a la galería
+            gallery.appendChild(photoContainer);
+        };
+
+        // Acceder a la cámara del dispositivo
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+                video.srcObject = stream;
+            })
+            .catch((err) => {
+                console.error("Error al acceder a la cámara: ", err);
+            });
+
+        // Función para tomar una foto
+        takePhotoButton.addEventListener('click', () => {
+            // Establecer dimensiones del canvas según el video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Dibujar la imagen del video en el canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convertir la imagen del canvas a una URL de imagen
+            const photoURL = canvas.toDataURL('image/png');
+
+            // Añadir la foto a la galería
+            addPhotoToGallery(photoURL);
+
+            // Guardar la foto en el LocalStorage
+            const photos = JSON.parse(localStorage.getItem('photos')) || [];
+            photos.push(photoURL);
+            savePhotosToLocalStorage(photos);
+        });
+
+        // Cerrar el modal al hacer clic en el botón de cerrar
+        closeModalBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // Cargar las fotos guardadas al cargar la página
+        loadPhotosFromLocalStorage();
+    </script>
+</body>
+</html>
+
