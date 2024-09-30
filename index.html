@@ -122,6 +122,14 @@
             background-color: #0288d1;
         }
 
+        /* Estilos para el selector de cámara */
+        #camera-select {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 999;
+        }
+
         /* Estilos para el footer */
         footer {
             background-color: #3f51b5;
@@ -171,11 +179,14 @@
 
     <!-- Header con el título -->
     <header>
-        <h1>MOTIGALLERY OM2024</h1>
+        <h1>MOTIGALLERY om2024</h1>
     </header>
 
     <!-- Contenedor principal -->
     <div id="app-container">
+        <!-- Selector de cámaras -->
+        <select id="camera-select"></select>
+
         <!-- Contenedor de la cámara -->
         <div id="camera-container">
             <video id="camera" autoplay></video>
@@ -198,8 +209,8 @@
     <!-- Footer fijo 
     <footer>
         ©OM 2024
-    </footer>-->
-
+    </footer>
+-->
     <!-- Material Design Lite JS -->
     <script src="https://code.getmdl.io/1.3.0/material.min.js"></script>
     <script>
@@ -207,6 +218,7 @@
         const canvas = document.getElementById('canvas');
         const takePhotoButton = document.getElementById('take-photo');
         const gallery = document.getElementById('gallery');
+        const cameraSelect = document.getElementById('camera-select');
         const context = canvas.getContext('2d');
 
         // Elementos del modal
@@ -214,75 +226,58 @@
         const modalImg = document.getElementById('modal-photo');
         const closeModalBtn = document.getElementById('close-modal');
 
-        // Cargar fotos desde el LocalStorage
-        const loadPhotosFromLocalStorage = () => {
-            const photos = JSON.parse(localStorage.getItem('photos')) || [];
-            photos.forEach(photoURL => addPhotoToGallery(photoURL));
+        let currentStream = null;
+
+        // Detener todos los dispositivos de video activos antes de cambiar
+        const stopVideoStream = () => {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
         };
 
-        // Guardar fotos en el LocalStorage
-        const savePhotosToLocalStorage = (photos) => {
-            localStorage.setItem('photos', JSON.stringify(photos));
-        };
-
-        // Añadir foto a la galería y al LocalStorage
-        const addPhotoToGallery = (photoURL) => {
-            // Crear un nuevo contenedor para la foto y el botón de eliminación
-            const photoContainer = document.createElement('div');
-            photoContainer.classList.add('photo-container');
-
-            // Crear el elemento img para la foto
-            const img = document.createElement('img');
-            img.src = photoURL;
-            img.classList.add('photo');
-
-            // Crear el botón para eliminar la foto
-            const deleteBtn = document.createElement('button');
-            deleteBtn.innerHTML = 'delete';
-            deleteBtn.classList.add('material-icons', 'delete-btn');
-
-            // Evento para eliminar la foto cuando se hace clic en el botón
-            deleteBtn.addEventListener('click', () => {
-                gallery.removeChild(photoContainer);
-                const photos = JSON.parse(localStorage.getItem('photos')) || [];
-                const updatedPhotos = photos.filter(photo => photo !== photoURL);
-                savePhotosToLocalStorage(updatedPhotos);
-            });
-
-            // Crear el botón para descargar la foto
-            const downloadBtn = document.createElement('button');
-            downloadBtn.innerHTML = 'download';
-            downloadBtn.classList.add('material-icons', 'download-btn');
-            downloadBtn.addEventListener('click', () => {
-                const link = document.createElement('a');
-                link.href = photoURL;
-                link.download = 'photo.png';
-                link.click();
-            });
-
-            // Evento para mostrar la foto en el modal al hacer clic en la imagen
-            img.addEventListener('click', () => {
-                modal.style.display = 'flex';
-                modalImg.src = photoURL;
-            });
-
-            // Añadir la imagen, el botón de eliminación y de descarga al contenedor
-            photoContainer.appendChild(img);
-            photoContainer.appendChild(deleteBtn);
-            photoContainer.appendChild(downloadBtn);
-
-            // Añadir el contenedor con la foto a la galería
-            gallery.appendChild(photoContainer);
-        };
-
-        // Acceder a la cámara del dispositivo
-        navigator.mediaDevices.getUserMedia({ video: true })
+        // Iniciar la cámara con el dispositivo seleccionado
+        const startCamera = (deviceId) => {
+            stopVideoStream(); // Detener cualquier transmisión de video anterior
+            navigator.mediaDevices.getUserMedia({
+                video: { deviceId: deviceId }
+            })
             .then((stream) => {
+                currentStream = stream;
                 video.srcObject = stream;
             })
             .catch((err) => {
                 console.error("Error al acceder a la cámara: ", err);
             });
+        };
+
+        // Cargar cámaras disponibles
+        const loadCameras = () => {
+            navigator.mediaDevices.enumerateDevices()
+            .then(devices => {
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                cameraSelect.innerHTML = ''; // Limpiar opciones anteriores
+
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Cámara ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+
+                // Usar la primera cámara por defecto o la seleccionada
+                if (videoDevices.length > 0) {
+                    startCamera(cameraSelect.value);
+                }
+            })
+            .catch(err => {
+                console.error("Error al enumerar dispositivos: ", err);
+            });
+        };
+
+        // Cambiar de cámara cuando el usuario selecciona una diferente
+        cameraSelect.addEventListener('change', () => {
+            startCamera(cameraSelect.value);
+        });
 
         // Función para tomar una foto
         takePhotoButton.addEventListener('click', () => {
@@ -305,10 +300,63 @@
             savePhotosToLocalStorage(photos);
         });
 
-        // Cerrar el modal al hacer clic en el botón de cerrar
+        // Añadir foto a la galería y al LocalStorage
+        const addPhotoToGallery = (photoURL) => {
+            const photoContainer = document.createElement('div');
+            photoContainer.classList.add('photo-container');
+
+            const img = document.createElement('img');
+            img.src = photoURL;
+            img.classList.add('photo');
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = 'delete';
+            deleteBtn.classList.add('material-icons', 'delete-btn');
+
+            deleteBtn.addEventListener('click', () => {
+                gallery.removeChild(photoContainer);
+                const photos = JSON.parse(localStorage.getItem('photos')) || [];
+                const updatedPhotos = photos.filter(photo => photo !== photoURL);
+                savePhotosToLocalStorage(updatedPhotos);
+            });
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.innerHTML = 'download';
+            downloadBtn.classList.add('material-icons', 'download-btn');
+            downloadBtn.addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.href = photoURL;
+                link.download = 'photo.png';
+                link.click();
+            });
+
+            img.addEventListener('click', () => {
+                modal.style.display = 'flex';
+                modalImg.src = photoURL;
+            });
+
+            photoContainer.appendChild(img);
+            photoContainer.appendChild(deleteBtn);
+            photoContainer.appendChild(downloadBtn);
+
+            gallery.appendChild(photoContainer);
+        };
+
+        const savePhotosToLocalStorage = (photos) => {
+            localStorage.setItem('photos', JSON.stringify(photos));
+        };
+
+        const loadPhotosFromLocalStorage = () => {
+            const photos = JSON.parse(localStorage.getItem('photos')) || [];
+            photos.forEach(photoURL => addPhotoToGallery(photoURL));
+        };
+
         closeModalBtn.addEventListener('click', () => {
             modal.style.display = 'none';
         });
+
+        // Cargar cámaras al iniciar
+        loadCameras();
 
         // Cargar las fotos guardadas al cargar la página
         loadPhotosFromLocalStorage();
